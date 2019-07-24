@@ -17,9 +17,13 @@ def main(args):
             images_file_path = os.path.join(args.source, bin_file['images'])
             labels_file_path = os.path.join(args.source, bin_file['labels'])
             if 'train' in bin_file['images']:
+                if args.debug:
+                    print("Processing training images")
                 destination_path = os.path.join(args.target, 'train')
             else:
                 destination_path = os.path.join(args.target, 'test')
+                if args.debug:
+                    print("Processing test images")
             os.makedirs(destination_path, exist_ok=True)
             images_arr = idx2numpy.convert_from_file(images_file_path)
             labels_arr = idx2numpy.convert_from_file(labels_file_path)
@@ -30,7 +34,10 @@ def main(args):
                 label = labels_arr[i]
                 image_name = str(i).zfill(file_name_padding) + '-' + str(label) + '.jpg'
                 destination = os.path.join(destination_path, image_name)
+                if args.debug:
+                    print('writing image {}, progess={}/{}'.format(image_name, i+1, num_images))
                 img.save(destination, format='jpeg')
+        print('\n----------COMPLETED----------')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -39,5 +46,6 @@ if __name__ == '__main__':
     parser.add_argument("-t", "--target", required=True,
                         help='target directory where processed images will be')
     parser.add_argument("-d", "--dataset", help="dataset to be processed")
+    parser.add_argument("--debug", action='store_true', help="show debug info")
     args = parser.parse_args()
     main(args)

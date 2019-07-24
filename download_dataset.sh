@@ -11,5 +11,5 @@ mkdir data/processed
 cd data/raw
 gunzip *
 cd $cwd
-pip3 install requirements.txt
-python3 utils/extract_images.py -s ./data/raw -t ./data/processed -d mnist
+pip3 install -r requirements.txt
+python3 utils/extract_images.py -s ./data/raw -t ./data/processed -d MNIST --debug
