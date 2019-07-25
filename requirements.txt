@@ -1,3 +1,7 @@
 idx2numpy==1.2.2
 torch
 torchvision
+glob
+numpy
+argparse
+tqdm
