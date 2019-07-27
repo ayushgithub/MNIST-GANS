@@ -72,5 +72,6 @@ class DataLoaderCustom():
             DataSetCustom(root_dir, self.transform),
             batch_size=self.batch_size,
             shuffle=self.shuffle,
-            num_workers=self.num_worker
+            num_workers=self.num_worker,
+            drop_last=True
         )

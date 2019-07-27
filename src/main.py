@@ -24,14 +24,14 @@ def flatten(tensor):
 
 
 def zeros(batch_size, args):
-    ret_tensor = Variable(torch.zeros(batch_size))
+    ret_tensor = Variable(torch.zeros(batch_size, 1))
     if use_cuda(args):
         ret_tensor.to(DEVICE)
     return ret_tensor
 
 
 def ones(batch_size, args):
-    ret_tensor = Variable(torch.ones(batch_size))
+    ret_tensor = Variable(torch.ones(batch_size, 1))
     if use_cuda(args):
         ret_tensor.to(DEVICE)
     return ret_tensor
@@ -50,7 +50,7 @@ def noise(batch_size, args):
 
 
 def train_discriminator(real_images, fake_images, discriminator_net, discriminator_optim, args):
-    batch_size = args.batch_size
+    batch_size = args.trainbs
     criterion = nn.BCELoss()
 
     discriminator_optim.zero_grad()
@@ -68,7 +68,7 @@ def train_discriminator(real_images, fake_images, discriminator_net, discriminat
 
 
 def train_generator(fake_images, discriminator_net, generator_optim, args):
-    batch_size = args.batch_size
+    batch_size = args.trainbs
     generator_optim.zero_grad()
     out_fake = discriminator_net(fake_images)
     criterion = nn.BCELoss()
@@ -81,21 +81,22 @@ def train_generator(fake_images, discriminator_net, generator_optim, args):
 def get_generated_images(images_flattened):
     images_flattened = images_flattened.mul(0.5).add(0.5).mul(255) # images now between [0,1]
     batch_size, image_size_flattened = images_flattened.size() 
-    width = height = math.sqrt(image_size_flattened)
-    return image_size_flattened.view(batch_size, width, height).numpy()
+    width = height = math.ceil(math.sqrt(image_size_flattened))
+    return images_flattened.view(batch_size, width, height).numpy()
 
 
 def sample(generator_net, test_noise, batch_no, epoch_no, image_save_folder, args):
-    out_generated = generator_net(test_noise)
+    with torch.no_grad():
+        out_generated = generator_net(test_noise)
     images = get_generated_images(out_generated)
-    batch_size = images.size(0)
+    batch_size = images.shape[0]
     grid_size = math.sqrt(batch_size)
 
     fig = plt.figure()
     for i in range(batch_size):
         fig.add_subplot(grid_size, grid_size, i+1)
         plt.imshow(images[i])
-    image_save_path = os.path.join(image_save_folder, epoch_no+'_'+batch_no+'.jpg')
+    image_save_path = os.path.join(image_save_folder, str(epoch_no)+'_'+str(batch_no)+'.jpg')
     fig.savefig(image_save_path)
     plt.close()
 
@@ -126,7 +127,6 @@ def train(discriminator_net, generator_net, train_loader, args):
             real_images = flatten(real_images)
             fake_images = generator_net(noise(batch_size, args)).detach()
             discriminator_optim.zero_grad()
-            predictions = discriminator_net()
             discriminator_loss, real_out, fake_out = train_discriminator(
                 real_images,
                 fake_images,
@@ -142,8 +142,8 @@ def train(discriminator_net, generator_net, train_loader, args):
                 args
             )
             if batch_no % args.log_interval == 0:
-                print("discriminator loss: {}, generator loss: {}".format(
-                    discriminator_loss, generator_loss
+                print("Epoch: {}, batch_no: {}, discriminator loss: {}, generator loss: {}".format(
+                    epoch, batch_no, discriminator_loss, generator_loss
                 ))
             if batch_no % args.test_frequency == 0:
                 sample(generator_net, test_noise, batch_no, epoch, image_save_folder, args)
