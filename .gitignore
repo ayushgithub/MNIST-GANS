@@ -103,5 +103,9 @@ venv.bak/
 # mypy
 .mypy_cache/
 
-# data
+# data - Stores data
 data
+#model - Stores Intermediate checkpoints
+model
+# generated Images
+generated_images

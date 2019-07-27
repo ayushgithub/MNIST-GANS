@@ -5,3 +5,4 @@ glob
 numpy
 argparse
 tqdm
+tensorboardx

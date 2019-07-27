@@ -1,5 +1,5 @@
 # MNIST-GANS
-Generative Adversarial Networks on MNIST dataset using pytorch. This code is tested on python 3.7
+Generative Adversarial Networks on MNIST dataset using pytorch. This code is tested on python 3.7. For training tips and network architecture on GANs I took the help from [here](https://medium.com/ai-society/gans-from-scratch-1-a-deep-introduction-with-code-in-pytorch-and-tensorflow-cb03cdcdba0f) 
 
 ### Steps to run the project
 * Download dataset using **download_dataset.sh**. Rest of the code assumes the dataset is present in **data** directory
