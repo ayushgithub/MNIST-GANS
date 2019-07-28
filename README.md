@@ -9,3 +9,5 @@ Generative Adversarial Networks on MNIST dataset using pytorch. This code is tes
 
 ###### Generated sample after 200 epochs
 ![Generated Sample](sample_generated_image.jpg)
+
+#### If you find a bug or you have a suggestion regarding the code structure or coding style please create a issue
