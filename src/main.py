@@ -6,12 +6,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from matplotlib import pyplot as plt
+from tensorboardX import SummaryWriter
 from torch.autograd.variable import Variable
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms, utils
 
 from dataloader import DataLoaderCustom
-from matplotlib import pyplot as plt
 from model import Discriminator, Generator
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -21,6 +22,11 @@ DEVICE = torch.device("cpu")
 def flatten(tensor):
     # assuming first dimension is batch dimension
     return tensor.view(tensor.size(0), -1)
+
+
+def reshape_images(images):
+    image_size = math.ceil(math.sqrt(images.size(1)))
+    return images.view(images.size(0), 1, image_size, image_size)
 
 
 def zeros(batch_size, args):
@@ -78,34 +84,20 @@ def train_generator(fake_images, discriminator_net, generator_optim, args):
     return loss
 
 
-def get_generated_images(images_flattened):
-    images_flattened = images_flattened.mul(0.5).add(0.5).mul(255) # images now between [0,1]
-    batch_size, image_size_flattened = images_flattened.size() 
-    width = height = math.ceil(math.sqrt(image_size_flattened))
-    return images_flattened.view(batch_size, width, height).numpy()
-
-
-def sample(generator_net, test_noise, batch_no, epoch_no, image_save_folder, args):
+def sample(generator_net, test_noise):
     with torch.no_grad():
         out_generated = generator_net(test_noise)
-    images = get_generated_images(out_generated)
-    batch_size = images.shape[0]
-    grid_size = math.sqrt(batch_size)
-
-    fig = plt.figure()
-    for i in range(batch_size):
-        fig.add_subplot(grid_size, grid_size, i+1)
-        plt.imshow(images[i])
-    image_save_path = os.path.join(image_save_folder, str(epoch_no)+'_'+str(batch_no)+'.jpg')
-    fig.savefig(image_save_path)
-    plt.close()
+    images = reshape_images(out_generated)
+    return utils.make_grid(images, normalize=True, scale_each=True)
 
 
 def train(discriminator_net, generator_net, train_loader, args):
-    image_save_folder = os.path.join(args.image_save_folder, args.uid)
+    print('Starting Training....')
+    logs_save_folder = os.path.join(args.logs_save_folder, args.uid)
     model_save_folder = os.path.join(args.model_save_folder, args.uid)
-    os.makedirs(image_save_folder, exist_ok=True)
+    os.makedirs(logs_save_folder, exist_ok=True)
     os.makedirs(model_save_folder, exist_ok=True)
+    writer = SummaryWriter(logs_save_folder)
 
     discriminator_optim = optim.Adam(
         discriminator_net.parameters(),
@@ -120,6 +112,7 @@ def train(discriminator_net, generator_net, train_loader, args):
         eps=args.epsilon
     )
     batch_size = args.trainbs
+    num_batches = len(train_loader.dataloader)
     test_noise = noise(args.test_set_size, args)
     for epoch in range(args.epoch):
         for batch_no, real_images in enumerate(train_loader.dataloader):
@@ -145,14 +138,20 @@ def train(discriminator_net, generator_net, train_loader, args):
                 print("Epoch: {}, batch_no: {}, discriminator loss: {}, generator loss: {}".format(
                     epoch, batch_no, discriminator_loss, generator_loss
                 ))
+                tb_step = epoch*num_batches + batch_no
+                writer.add_scalar('Generator Loss', generator_loss, tb_step)
+                writer.add_scalar('Discriminator Loss', discriminator_loss, tb_step)
             if batch_no % args.test_frequency == 0:
-                sample(generator_net, test_noise, batch_no, epoch, image_save_folder, args)
-
+                tb_step = epoch*num_batches + batch_no
+                generated_images = sample(generator_net, test_noise)
+                writer.add_image('generated_images', generated_images, tb_step)
+    
+    writer.close()
 
 
 def main(args):
     # create some default directories
-    os.makedirs(os.path.join(ROOT_DIR, 'generated_images'), exist_ok=True)
+    os.makedirs(os.path.join(ROOT_DIR, 'logs'), exist_ok=True)
     os.makedirs(os.path.join(ROOT_DIR, 'model'), exist_ok=True)
 
     torch.manual_seed(args.seed)
@@ -198,7 +197,7 @@ if __name__ == '__main__':
                         help='Size of test set for generating images')
     parser.add_argument('--test_frequency', type=int, default=100,
                         help='How frequently to generate test images')
-    parser.add_argument('--image_save_folder', default=os.path.join(ROOT_DIR, 'generated_images'),
+    parser.add_argument('--logs_save_folder', default=os.path.join(ROOT_DIR, 'logs'),
                         help='Folder to save the generated images')
     parser.add_argument('--uid', type=str, required=True,
                         help='Unique identifier for the run')

@@ -107,5 +107,5 @@ venv.bak/
 data
 #model - Stores Intermediate checkpoints
 model
-# generated Images
-generated_images
+# logs
+logs
