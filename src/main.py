@@ -94,29 +94,51 @@ def sample(generator_net, test_noise):
 def train(discriminator_net, generator_net, train_loader, args):
     print('Starting Training....')
     logs_save_folder = os.path.join(args.logs_save_folder, args.uid)
-    model_save_folder = os.path.join(args.model_save_folder, args.uid)
+    model_save_path = os.path.join(args.model_save_folder, args.uid+'.tar')
     os.makedirs(logs_save_folder, exist_ok=True)
-    os.makedirs(model_save_folder, exist_ok=True)
+    os.makedirs(args.model_save_folder, exist_ok=True)
     writer = SummaryWriter(logs_save_folder)
 
     discriminator_optim = optim.Adam(
         discriminator_net.parameters(),
         lr=args.lr,
         betas=(args.beta1, args.beta2),
-        eps=args.epsilon
+        eps=args.epsilon,
+        weight_decay=args.wd
     )
     generator_optim = optim.Adam(
         generator_net.parameters(),
         lr=args.lr,
         betas=(args.beta1, args.beta2),
-        eps=args.epsilon
+        eps=args.epsilon,
+        weight_decay=args.wd
     )
+
+    if use_cuda(args):
+        discriminator_optim = discriminator_optim.to(DEVICE)
+        generator_optim = generator_optim.to(DEVICE)
     batch_size = args.trainbs
     num_batches = len(train_loader.dataloader)
     test_noise = noise(args.test_set_size, args)
-    for epoch in range(args.epoch):
+
+    if args.start_from_checkpoint:
+        checkpoint = torch.load(args.start_from_checkpoint, map_location=DEVICE)
+        discriminator_net.load_state_dict(checkpoint['discriminator_params'])
+        discriminator_optim.load_state_dict(checkpoint['discriminator_optim'])
+        generator_net.load_state_dict(checkpoint['generator_params'])
+        generator_optim.load_state_dict(checkpoint['generator_optim'])
+        test_noise = checkpoint['test_noise']
+        discriminator_net.train()
+        generator_net.train()
+        print('starting training from epoch: {} with discriminator loss: {} and generator loss: {}'
+              .format(checkpoint['epoch'], checkpoint['discriminator_loss'], checkpoint['generator_loss']))
+
+    start_epoch = checkpoint['epoch'] if args.start_from_checkpoint else 0
+    for epoch in range(start_epoch, args.epoch):
         for batch_no, real_images in enumerate(train_loader.dataloader):
             # Train Discriminator
+            if use_cuda(args):
+                real_images = real_images.to(DEVICE)
             real_images = flatten(real_images)
             fake_images = generator_net(noise(batch_size, args)).detach()
             discriminator_optim.zero_grad()
@@ -145,7 +167,18 @@ def train(discriminator_net, generator_net, train_loader, args):
                 tb_step = epoch*num_batches + batch_no
                 generated_images = sample(generator_net, test_noise)
                 writer.add_image('generated_images', generated_images, tb_step)
-    
+        if epoch % args.save_model_every == 0:
+            print('Saving model to {}', model_save_path)
+            torch.save({
+                'epoch': epoch,
+                'discriminator_params': discriminator_net.state_dict(),
+                'discriminator_optim': discriminator_optim.state_dict(),
+                'discriminator_loss': discriminator_loss,
+                'generator_params': generator_net.state_dict(),
+                'generator_optim': generator_optim.state_dict(),
+                'generator_loss': generator_loss,
+                'test_noise': test_noise,
+            }, model_save_path)
     writer.close()
 
 
@@ -160,8 +193,8 @@ def main(args):
     discriminator_net = Discriminator()
     generator_net = Generator()
     if use_cuda(args):
-        discriminator_net.to(DEVICE)
-        generator_net.to(DEVICE)
+        discriminator_net = discriminator_net.to(DEVICE)
+        generator_net = generator_net.to(DEVICE)
     train(discriminator_net, generator_net, train_loader, args)
 
 
@@ -169,8 +202,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--trainbs', type=int, default=64,
                         help='Batch size while training')
-    parser.add_argument('--testbs', type=int, default=64,
-                        help='Batch size while testing')
     parser.add_argument('--lr', type=float, default=0.0002,
                         help='Learning Rate')
     parser.add_argument('--epoch', type=int, default=200,
@@ -189,7 +220,6 @@ if __name__ == '__main__':
                         help='how many batches to wait before logging training status')
     parser.add_argument('--train_dataset', default=os.path.join(ROOT_DIR, 'data/processed/train'),
                         help='Path to the training images directory')
-    parser.add_argument('--test_dataset', default=os.path.join(ROOT_DIR, 'data/processed/test'))
     parser.add_argument('--no_cuda', action='store_true', help='Dont use cuda')
     parser.add_argument('--model_save_folder', default=os.path.join(ROOT_DIR, 'model'),
                         help='Directory to save models')
@@ -197,6 +227,9 @@ if __name__ == '__main__':
                         help='Size of test set for generating images')
     parser.add_argument('--test_frequency', type=int, default=100,
                         help='How frequently to generate test images')
+    parser.add_argument('--save_model_every', type=int, default=1,
+                        help='save model every x epoch')
+    parser.add_argument('--start_from_checkpoint', help='path to the saved model')
     parser.add_argument('--logs_save_folder', default=os.path.join(ROOT_DIR, 'logs'),
                         help='Folder to save the generated images')
     parser.add_argument('--uid', type=str, required=True,
